@@ -181,6 +181,17 @@ export const projects = [
     demo: "",
   },
   {
+    title: "Meu Primeiro Portfólio",
+    area: ["frontend"],
+    description: {
+      pt: "Meu primeiro portfólio, feito 100% à mão e sem nenhuma ajuda de IA, com HTML, CSS, JavaScript e Bootstrap. Foi onde aprendi os fundamentos de front-end e layout responsivo.",
+      en: "My first portfolio, hand-coded from scratch with no AI assistance, using HTML, CSS, JavaScript and Bootstrap. Where I learned front-end fundamentals and responsive layout.",
+    },
+    tags: ["HTML5", "CSS3", "JavaScript", "Bootstrap"],
+    repo: "https://github.com/zaninluis/portfolio",
+    demo: "",
+  },
+  {
     title: "Dengue Alerta — Front-end",
     area: ["frontend"],
     description: {
