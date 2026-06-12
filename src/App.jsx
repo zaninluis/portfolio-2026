@@ -1,6 +1,187 @@
 import { useState, useEffect, useRef } from "react";
 import { profile, areas, experience, education, projects, ui } from "./data";
 
+const reducedMotion = () =>
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// ---- Chuva de dados (matrix rain) em canvas ----
+function DataRain() {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (reducedMotion()) return;
+    const canvas = ref.current;
+    const ctx = canvas.getContext("2d");
+    const glyphs = "01アイウエオカキクケコサシスセソタチツテト<>/{}[]=+*#$";
+    let cols, drops, raf;
+    const fontSize = 14;
+
+    const resize = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      cols = Math.floor(canvas.width / fontSize);
+      drops = Array.from({ length: cols }, () =>
+        Math.floor(Math.random() * -canvas.height / fontSize)
+      );
+    };
+    resize();
+    window.addEventListener("resize", resize);
+
+    let last = 0;
+    const draw = (ts) => {
+      raf = requestAnimationFrame(draw);
+      if (ts - last < 50) return; // ~20fps é suficiente e leve
+      last = ts;
+      ctx.fillStyle = "rgba(6, 9, 13, 0.18)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.font = `${fontSize}px JetBrains Mono, monospace`;
+      for (let i = 0; i < cols; i++) {
+        const ch = glyphs[Math.floor(Math.random() * glyphs.length)];
+        const x = i * fontSize;
+        const y = drops[i] * fontSize;
+        // cabeça mais clara, rastro some pelo fade do fillRect
+        ctx.fillStyle = Math.random() > 0.96 ? "#9ffff0" : "rgba(20, 210, 200, 0.55)";
+        ctx.fillText(ch, x, y);
+        if (y > canvas.height && Math.random() > 0.985) drops[i] = 0;
+        drops[i]++;
+      }
+    };
+    raf = requestAnimationFrame(draw);
+
+    const onVis = () => {
+      if (document.hidden) cancelAnimationFrame(raf);
+      else raf = requestAnimationFrame(draw);
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", resize);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, []);
+  return <canvas ref={ref} className="fx-rain" aria-hidden="true" />;
+}
+
+// ---- Efeito de decodificação (scramble) no texto ----
+function Decode({ text, className, ...rest }) {
+  const [out, setOut] = useState(text);
+  const chars = "!<>-_\\/[]{}—=+*^?#01";
+  useEffect(() => {
+    if (reducedMotion()) {
+      setOut(text);
+      return;
+    }
+    let frame = 0;
+    let raf;
+    const total = text.length * 3 + 12;
+    const tick = () => {
+      frame++;
+      const settled = Math.floor((frame / total) * text.length * 1.4);
+      setOut(
+        text
+          .split("")
+          .map((c, i) => {
+            if (c === " ") return " ";
+            if (i < settled) return c;
+            return chars[Math.floor(Math.random() * chars.length)];
+          })
+          .join("")
+      );
+      if (settled < text.length) raf = requestAnimationFrame(tick);
+      else setOut(text);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [text]);
+  return (
+    <span className={className} {...rest}>
+      {out}
+    </span>
+  );
+}
+
+// ---- Typewriter ciclando os papéis ----
+function Typewriter({ words }) {
+  const [i, setI] = useState(0);
+  const [txt, setTxt] = useState("");
+  const [del, setDel] = useState(false);
+  useEffect(() => {
+    if (reducedMotion()) {
+      setTxt(words[0]);
+      return;
+    }
+    const word = words[i % words.length];
+    const speed = del ? 32 : 64;
+    const timer = setTimeout(() => {
+      if (!del) {
+        const next = word.slice(0, txt.length + 1);
+        setTxt(next);
+        if (next === word) setTimeout(() => setDel(true), 1600);
+      } else {
+        const next = word.slice(0, txt.length - 1);
+        setTxt(next);
+        if (next === "") {
+          setDel(false);
+          setI((v) => v + 1);
+        }
+      }
+    }, speed);
+    return () => clearTimeout(timer);
+  }, [txt, del, i, words]);
+  return (
+    <span className="typewriter">
+      {txt}
+      <span className="caret" aria-hidden="true" />
+    </span>
+  );
+}
+
+// ---- Ticker infinito de skills ----
+function SkillTicker() {
+  const items = areas.flatMap((a) => a.skills);
+  const row = [...items, ...items]; // duplica p/ loop contínuo
+  return (
+    <div className="ticker" aria-hidden="true">
+      <div className="ticker-track">
+        {row.map((s, idx) => (
+          <span className="ticker-item" key={idx}>
+            {s} <i className="tick-sep">◆</i>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---- Tilt 3D nos cards ----
+function useTilt(deps = []) {
+  useEffect(() => {
+    if (reducedMotion()) return;
+    const cards = document.querySelectorAll(".area-card, .project-card");
+    const onMove = (e) => {
+      const el = e.currentTarget;
+      const r = el.getBoundingClientRect();
+      const px = (e.clientX - r.left) / r.width - 0.5;
+      const py = (e.clientY - r.top) / r.height - 0.5;
+      el.style.transform = `perspective(800px) rotateX(${py * -7}deg) rotateY(${px * 9}deg) translateY(-6px)`;
+      el.style.setProperty("--mx", `${(px + 0.5) * 100}%`);
+      el.style.setProperty("--my", `${(py + 0.5) * 100}%`);
+    };
+    const onLeave = (e) => {
+      e.currentTarget.style.transform = "";
+    };
+    cards.forEach((c) => {
+      c.addEventListener("mousemove", onMove);
+      c.addEventListener("mouseleave", onLeave);
+    });
+    return () =>
+      cards.forEach((c) => {
+        c.removeEventListener("mousemove", onMove);
+        c.removeEventListener("mouseleave", onLeave);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+}
+
 // Revela elementos com a classe .reveal conforme entram na viewport
 function useScrollReveal(deps = []) {
   useEffect(() => {
@@ -37,15 +218,19 @@ export default function App() {
   const [lang, setLang] = useState("pt");
   const t = (obj) => (obj && obj[lang] !== undefined ? obj[lang] : obj);
   useScrollReveal([lang]);
+  useTilt([lang]);
 
   return (
     <>
       <div className="fx-grid" aria-hidden="true" />
+      <DataRain />
       <div className="fx-glow" aria-hidden="true" />
       <div className="fx-scanlines" aria-hidden="true" />
+      <div className="fx-vignette" aria-hidden="true" />
       <Nav lang={lang} setLang={setLang} t={t} />
       <main>
-        <Hero t={t} />
+        <Hero t={t} lang={lang} />
+        <SkillTicker />
         <Areas t={t} />
         <Experience t={t} />
         <Projects lang={lang} t={t} />
@@ -101,7 +286,11 @@ function Nav({ lang, setLang, t }) {
   );
 }
 
-function Hero({ t }) {
+function Hero({ t, lang }) {
+  const roleWords =
+    lang === "pt"
+      ? ["Desenvolvedor Front-end", "Desenvolvedor Back-end", "Quality Assurance"]
+      : ["Front-end Developer", "Back-end Developer", "Quality Assurance"];
   return (
     <header id="top" className="hero">
       <div className="container reveal">
@@ -112,10 +301,12 @@ function Hero({ t }) {
         <h1>
           {t({ pt: "Olá, eu sou ", en: "Hi, I'm " })}
           <span className="accent glitch" data-text={profile.name}>
-            {profile.name}
+            <Decode text={profile.name} key={lang} />
           </span>
         </h1>
-        <p className="role">{t(profile.role)}</p>
+        <p className="role">
+          <Typewriter words={roleWords} key={lang} />
+        </p>
         <p className="bio">{t(profile.bio)}</p>
         <p className="location">{t(profile.location)}</p>
         <div className="cta-row">
